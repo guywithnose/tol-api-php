@@ -234,6 +234,24 @@ final class ClientTest extends \PHPUnit_Framework_TestCase
 
     /**
      * @test
+     * @covers ::get
+     * @covers ::startGet
+     * @uses \DominionEnterprises\Api\Client::end
+     */
+    public function getWithParameters()
+    {
+        $authentication = Authentication::createClientCredentials('not under test', 'not under test');
+        $client = new Client(new GetWithParametersAdapter(), $authentication, 'baseUrl/v1');
+
+        $response = $client->get('resource name', 'the id', ['foo' => 'bar']);
+
+        $this->assertSame(200, $response->getHttpCode());
+        $this->assertSame(['key' => 'value'], $response->getResponse());
+        $this->assertSame(['Content-Type' => ['application/json']], $response->getResponseHeaders());
+    }
+
+    /**
+     * @test
      * @covers ::put
      * @covers ::startPut
      * @uses \DominionEnterprises\Api\Client::end
@@ -506,7 +524,7 @@ final class ClientTest extends \PHPUnit_Framework_TestCase
     public function get_fromCache()
     {
         $cache = new ArrayCache();
-        $request = new Request('baseUrl/a+url/id', 'not under test');
+        $request = new Request('baseUrl/a+url/id?', 'not under test');
         $expected = new Response(200, ['key' => ['value']], ['doesnt' => 'matter']);
         $cache->set($request, $expected);
         $authentication = Authentication::createClientCredentials('not under test', 'not under test');
@@ -524,7 +542,7 @@ final class ClientTest extends \PHPUnit_Framework_TestCase
     public function get_disabledCache()
     {
         $cache = new ArrayCache();
-        $request = new Request('baseUrl/a+url/id', 'not under test');
+        $request = new Request('baseUrl/a+url/id?', 'not under test');
         $unexpected = new Response(200, ['key' => ['value']], ['doesnt' => 'matter']);
         $expected = new Response(200, ['Content-Type' => ['application/json']], []);
         $cache->set($request, $unexpected);
@@ -572,7 +590,7 @@ final class ClientTest extends \PHPUnit_Framework_TestCase
         $authentication = Authentication::createClientCredentials('not under test', 'not under test');
         $client = new Client(new CacheAdapter(), $authentication, 'baseUrl', Client::CACHE_MODE_GET, $cache);
         $expected = $client->end($client->startGet('a url', 'id'));
-        $actual = $cache->cache['baseUrl/a+url/id'];
+        $actual = $cache->cache['baseUrl/a+url/id?'];
         $this->assertEquals($expected, $actual);
     }
 
@@ -660,7 +678,30 @@ final class GetAdapter implements Adapter
             return new Response(200, ['Content-Type' => ['application/json']], ['access_token' => 'a token', 'expires_in' => 1]);
         }
 
-        if ($this->_request->getMethod() === 'GET' && $this->_request->getUrl() === 'baseUrl/v1/resource+name/the+id') {
+        if ($this->_request->getMethod() === 'GET' && $this->_request->getUrl() === 'baseUrl/v1/resource+name/the+id?') {
+            return new Response(200, ['Content-Type' => ['application/json']], ['key' => 'value']);
+        }
+
+        throw new \Exception('Unexpected request');
+    }
+}
+
+final class GetWithParametersAdapter implements Adapter
+{
+    private $_request;
+
+    public function start(Request $request)
+    {
+        $this->_request = $request;
+    }
+
+    public function end($handle)
+    {
+        if (substr($this->_request->getUrl(), -5) === 'token') {
+            return new Response(200, ['Content-Type' => ['application/json']], ['access_token' => 'a token', 'expires_in' => 1]);
+        }
+
+        if ($this->_request->getMethod() === 'GET' && $this->_request->getUrl() === 'baseUrl/v1/resource+name/the+id?foo=bar') {
             return new Response(200, ['Content-Type' => ['application/json']], ['key' => 'value']);
         }
 
